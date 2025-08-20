@@ -29,7 +29,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(authRequests ->
                         authRequests
-                                .requestMatchers("/auth/**").permitAll()
+                                .requestMatchers("/auth/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                                 .anyRequest().authenticated())
                 //.formLogin(Customizer.withDefaults()) default authentication by Spring Security
                 .sessionManagement(sessionManagement ->
