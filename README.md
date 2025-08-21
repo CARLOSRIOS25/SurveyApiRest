@@ -32,8 +32,7 @@ docker compose up -d --build
 ```
 uso de endpoints:
 
-<img width="226" height="404" alt="image" src="https://github.com/user-attachments/assets/1002e0c1-8008-4681-95fd-320143dd057f" />
-
+<img width="1458" height="841" alt="image" src="https://github.com/user-attachments/assets/244e367d-71b6-434d-97df-394561b901b9" />
 
 - loginAuth(post): /auth/login
 
