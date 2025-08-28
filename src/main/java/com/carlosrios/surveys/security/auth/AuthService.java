@@ -22,10 +22,10 @@ public class AuthService {
 
     //request the auth through authenticationManager for the login
     public AuthResponse login(LoginRequest loginRequest) {
-        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.username(), loginRequest.password()));
-
         User user = userRepository.findByUsername(loginRequest.username())
                 .orElseThrow(() -> new IllegalArgumentException("User not found"));
+
+        authenticationManager.authenticate(new UsernamePasswordAuthenticationToken(loginRequest.username(), loginRequest.password()));
 
         String token = jwtService.getToken(user);
         return AuthResponse.builder().token(token).build();
