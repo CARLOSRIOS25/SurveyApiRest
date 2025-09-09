@@ -21,6 +21,7 @@ services:
     container_name: surveys-backend
     restart: always
     environment:
+      SPRING_PROFILES_ACTIVE: docker, default
       SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/surveysdb
       SPRING_DATASOURCE_USERNAME: surveyuser
       SPRING_DATASOURCE_PASSWORD: surveypass
