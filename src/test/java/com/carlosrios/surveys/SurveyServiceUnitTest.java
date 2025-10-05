@@ -58,24 +58,24 @@ class SurveyServiceUnitTest {
 
     @BeforeEach
     void setUp() {
-        survey = new Survey(1L, "test survey 1", "survey for test 1", List.of());
+        survey = new Survey(1L, "Test survey 1", "survey for test 1", List.of());
 
-        surveyRequestDTO = new SurveyRequestDTO("test survey req", "survey req for test", List.of());
+        surveyRequestDTO = new SurveyRequestDTO("Test survey req", "survey req for test", List.of());
 
         surveyResponseDTO = SurveyResponseDTO.builder()
                 .id(1L)
-                .title("test survey 1")
+                .title("Test survey 1")
                 .description("survey for test 1")
                 .questions(List.of())
                 .build();
 
-        question = new Question(1L, "test question 1", "question for test 1", List.of(), survey);
+        question = new Question(1L, "test question 1?", "question for test 1", List.of(), survey);
 
-        questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
+        questionRequestDTO = new QuestionRequestDTO("test question req?", "question req for test", List.of());
 
         questionResponseDTO = QuestionResponseDTO.builder()
                 .id(1L)
-                .description("question for test 1")
+                .description("question for test 1?")
                 .options(List.of())
                 .build();
 
@@ -85,20 +85,20 @@ class SurveyServiceUnitTest {
 
     @Test
     void retrieveAllSurveys_shouldReturnPageOfSurveys(){
-        Survey survey1 = new Survey(1L, "test survey 1", "survey for test 1", List.of());
-        Survey survey2 = new Survey(2L, "test survey 2", "survey for test 2", List.of());
+        Survey survey1 = new Survey(1L, "Test survey 1", "survey for test 1", List.of());
+        Survey survey2 = new Survey(2L, "Test survey 2", "survey for test 2", List.of());
 
         when(surveyRepository.findAll(PageRequest.of(0, 10)))
                 .thenReturn(new PageImpl<>(List.of(survey1, survey2), PageRequest.of(0, 10), 2));
 
-        when(surveyMapper.toDto(survey1)).thenReturn(new SurveyResponseDTO(1L, "test survey 1", "survey for test 1", List.of()));
-        when(surveyMapper.toDto(survey2)).thenReturn(new SurveyResponseDTO(2L, "test survey 2", "survey for test 2", List.of()));
+        when(surveyMapper.toDto(survey1)).thenReturn(new SurveyResponseDTO(1L, "Test survey 1", "survey for test 1", List.of()));
+        when(surveyMapper.toDto(survey2)).thenReturn(new SurveyResponseDTO(2L, "Test survey 2", "survey for test 2", List.of()));
 
         Page<SurveyResponseDTO> surveysDTO = surveyService.retrieveAllSurveys(PageRequest.of(0, 10));
 
         assertEquals(2, surveysDTO.getTotalElements());
-        assertEquals("test survey 1", surveysDTO.toList().get(0).title());
-        assertEquals("test survey 2", surveysDTO.toList().get(1).title());
+        assertEquals("Test survey 1", surveysDTO.toList().get(0).title());
+        assertEquals("Test survey 2", surveysDTO.toList().get(1).title());
 
         verify(surveyRepository).findAll(PageRequest.of(0, 10));
         verify(surveyMapper, times(2)).toDto(any(Survey.class));
@@ -120,8 +120,59 @@ class SurveyServiceUnitTest {
     }
 
     @Test
+    void createSurvey_shouldThrowTitleValidExceptionForUppercase() {
+
+        surveyRequestDTO = new SurveyRequestDTO("test survey 1", "survey for test 1", List.of());
+
+        TitleNotValidException ex =
+                assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+        System.out.println(ex.getMessage());
+
+        assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
+
+        verify(surveyRepository, never()).save(any(Survey.class));
+    }
+
+    @Test
+    void createSurvey_shouldThrowTitleValidExceptionForTitleLength() {
+
+        surveyRequestDTO = new SurveyRequestDTO("Test survey 1, test survey 1", "survey for test 1", List.of());
+
+        TitleNotValidException ex =
+                assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+        System.out.println(ex.getMessage());
+
+        assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
+
+        verify(surveyRepository, never()).save(any(Survey.class));
+    }
+
+    @Test
+    void createSurvey_shouldThrowIllegalArgumentException() {
+
+        questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
+
+        surveyRequestDTO = new SurveyRequestDTO
+                ("Test survey 1", "survey for test 1",
+                        List.of(questionRequestDTO));
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+        System.out.println(ex.getMessage());
+
+        var invalidQuestions = List.of(questionRequestDTO.description());
+
+        assertEquals("the next questions must ends with a question mark (?): " + invalidQuestions, ex.getMessage());
+
+        verify(surveyRepository, never()).save(any(Survey.class));
+    }
+
+    @Test
     void retrieveAllQuestions_shouldThrownExceptionIfTitleDoesNotExists() {
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(questionRepository.findAllBySurveyTitle(title)).thenReturn(Optional.empty());
 
@@ -137,7 +188,7 @@ class SurveyServiceUnitTest {
 
     @Test
     void retrieveSurveyByTitle_shouldReturnSurveyIfExists(){
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
@@ -147,7 +198,7 @@ class SurveyServiceUnitTest {
         var surveyDTO = surveyService.readSurveyByTitle(title);
 
         assertNotNull(surveyDTO);
-        assertEquals("test survey 1", surveyDTO.title());
+        assertEquals("Test survey 1", surveyDTO.title());
 
         verify(surveyRepository).findByTitle(title);
         verify(surveyMapper).toDto(survey);
@@ -155,7 +206,7 @@ class SurveyServiceUnitTest {
 
     @Test
     void retrieveSurveyByTitle_shouldThrowExceptionIfTitleDoesNotExist(){
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
@@ -173,7 +224,7 @@ class SurveyServiceUnitTest {
     @Test
     void retrieveQuestionById_shouldThrowExceptionIfTitleDoesNotExist(){
         var questionId = 1L;
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
@@ -190,7 +241,7 @@ class SurveyServiceUnitTest {
     @Test
     void retrieveQuestionById_shouldThrowExceptionIfIdDoesNotExist(){
         var questionId = 2L;
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
@@ -205,8 +256,8 @@ class SurveyServiceUnitTest {
     }
 
     @Test
-    void UpdateSurvey_shouldUpdateSurveyIfExists() {
-        var title = "test survey 1";
+    void updateSurvey_shouldUpdateSurveyIfExists() {
+        var title = "Test survey 1";
 
         var updatedSurvey = new Survey(1L, surveyRequestDTO.title(), surveyRequestDTO.description(), List.of());
 
@@ -238,7 +289,7 @@ class SurveyServiceUnitTest {
 
     @Test
     void updateSurvey_shouldThrowExceptionIfTitleDoesNotExist(){
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
@@ -254,9 +305,43 @@ class SurveyServiceUnitTest {
     }
 
     @Test
-    void UpdateQuestion_shouldUpdateQuestionIfExists() {
+    void updateSurvey_shouldThrowTitleValidExceptionForUppercase(){
+        var title = "Test survey 2";
+
+        surveyRequestDTO = new SurveyRequestDTO("test survey 2", "survey for test 2", List.of());
+
+        TitleNotValidException ex =
+                assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
+
+        System.out.println(ex.getMessage());
+
+        assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
+
+        verifyNoInteractions(surveyRepository);
+        verifyNoInteractions(surveyMapper);
+    }
+
+    @Test
+    void updateSurvey_shouldThrowTitleValidExceptionForTitleLength(){
+        var title = "Test survey 2";
+
+        surveyRequestDTO = new SurveyRequestDTO("Test survey 2, test survey 2", "survey for test 2", List.of());
+
+        TitleNotValidException ex =
+                assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
+
+        System.out.println(ex.getMessage());
+
+        assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
+
+        verifyNoInteractions(surveyRepository);
+        verifyNoInteractions(surveyMapper);
+    }
+
+    @Test
+    void updateQuestion_shouldUpdateQuestionIfExists() {
         var questionId = 1L;
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         var updatedQuestion =
                 new Question(1L, questionRequestDTO.description(), questionRequestDTO.correctAnswer(), questionRequestDTO.options(), survey);
@@ -288,9 +373,9 @@ class SurveyServiceUnitTest {
     }
 
     @Test
-    void UpdateQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
+    void updateQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
         var questionId = 1L;
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
@@ -307,9 +392,9 @@ class SurveyServiceUnitTest {
     }
 
     @Test
-    void UpdateQuestion_shouldThrowExceptionIfIdDoesNotExist() {
+    void updateQuestion_shouldThrowExceptionIfIdDoesNotExist() {
         var questionId = 2L;
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
@@ -322,6 +407,24 @@ class SurveyServiceUnitTest {
 
         verify(surveyRepository).findByTitle(title);
         verifyNoInteractions(questionRepository);
+        verifyNoInteractions(questionMapper);
+    }
+
+    @Test
+    void updateQuestion_shouldThrowIllegalArgumentException() {
+        var questionId = 1L;
+        var title = "Test survey 1";
+
+        questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
+
+        IllegalArgumentException ex =
+                assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
+
+        System.out.println(ex.getMessage());
+
+        assertEquals("Question description must end with a question mark (?): " +
+                questionRequestDTO.description(), ex.getMessage());
+
         verifyNoInteractions(questionMapper);
     }
 
@@ -358,7 +461,7 @@ class SurveyServiceUnitTest {
     @Test
     void deleteQuestion_shouldDeleteQuestionIfExists() {
         var questionId = 1L;
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
@@ -375,7 +478,7 @@ class SurveyServiceUnitTest {
     @Test
     void deleteQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
         var questionId = 1L;
-        var title = "test survey 2";
+        var title = "Test survey 2";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
@@ -393,7 +496,7 @@ class SurveyServiceUnitTest {
     @Test
     void deleteQuestion_shouldThrowExceptionIfIdDoesNotExist() {
         var questionId = 2L;
-        var title = "test survey 1";
+        var title = "Test survey 1";
 
         when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
