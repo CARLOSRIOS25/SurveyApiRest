@@ -1,6 +1,7 @@
 package com.carlosrios.surveys.security.auth;
 
 import com.carlosrios.surveys.infra.exceptions.ErrorResponse;
+import com.rioscarlos.common.utils.Validator;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -49,6 +50,11 @@ public class AuthController {
                     content = @Content(mediaType = "application/json", schema = @Schema(implementation = AuthResponse.class)))
     )
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest registerRequest) {
+        if (!Validator.isPasswordValid(registerRequest.password())){
+            throw new IllegalArgumentException
+                    ("Password must contains at least 2 lowercase letters, 2 uppercase letters, 2 digits, and 2 symbols");
+        }
+
         //returns AuthResponse Object
         return ResponseEntity.ok(authService.register(registerRequest));
     }

@@ -42,7 +42,7 @@ public class SurveyController {
     public ResponseEntity<SurveyResponseDTO> createSurvey(@Valid @RequestBody SurveyRequestDTO requestDTO,
                                                           UriComponentsBuilder uriComponentsBuilder) {
         var response = surveyService.createSurvey(requestDTO);
-        final URI url = uriComponentsBuilder.path("/{title}").buildAndExpand(requestDTO.title()).toUri();
+        final URI url = uriComponentsBuilder.path("/api/surveys/{title}").buildAndExpand(requestDTO.title()).toUri();
         return ResponseEntity.created(url).body(response);
     }
 
@@ -114,7 +114,7 @@ public class SurveyController {
                                                               @Valid @PathVariable String surveyTitle,
                                                               UriComponentsBuilder uriComponentsBuilder){
         var response = surveyService.addQuestion(questionRequestDTO, surveyTitle);
-        final URI url = uriComponentsBuilder.path("survey/{title}/questions/{id}").buildAndExpand(surveyTitle, response.id()).toUri();
+        final URI url = uriComponentsBuilder.path("/api/surveys/{title}/questions/{id}").buildAndExpand(surveyTitle, response.id()).toUri();
         return ResponseEntity.created(url).body(response);
     }
 
