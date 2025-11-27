@@ -12,8 +12,8 @@ import com.carlosrios.surveys.repositories.SurveyRepository;
 import com.carlosrios.surveys.services.QuestionMapper;
 import com.carlosrios.surveys.services.SurveyMapper;
 import com.carlosrios.surveys.services.SurveyServiceImpl;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
+import lombok.extern.slf4j.Slf4j;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
@@ -29,6 +29,7 @@ import java.util.Optional;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+@Slf4j
 @ExtendWith(MockitoExtension.class)
 class SurveyServiceUnitTest {
 
@@ -57,7 +58,9 @@ class SurveyServiceUnitTest {
     private QuestionResponseDTO questionResponseDTO;
 
     @BeforeEach
-    void setUp() {
+    void setUp(TestInfo testInfo) {
+        log.info("Executing: {}", testInfo.getDisplayName());
+
         survey = new Survey(1L, "Test survey 1", "survey for test 1", List.of());
 
         surveyRequestDTO = new SurveyRequestDTO("Test survey req", "survey req for test", List.of());
@@ -83,432 +86,469 @@ class SurveyServiceUnitTest {
         survey.setQuestions(new ArrayList<>(List.of(question)));
     }
 
-    @Test
-    void retrieveAllSurveys_shouldReturnPageOfSurveys(){
-        Survey survey1 = new Survey(1L, "Test survey 1", "survey for test 1", List.of());
-        Survey survey2 = new Survey(2L, "Test survey 2", "survey for test 2", List.of());
+    @Nested
+    @DisplayName("All related survey tests")
+    class SurveyTests{
 
-        when(surveyRepository.findAll(PageRequest.of(0, 10)))
-                .thenReturn(new PageImpl<>(List.of(survey1, survey2), PageRequest.of(0, 10), 2));
+        @Nested
+        @DisplayName("All survey happy path tests")
+        class SurveyHappyPathTests{
 
-        when(surveyMapper.toDto(survey1)).thenReturn(new SurveyResponseDTO(1L, "Test survey 1", "survey for test 1", List.of()));
-        when(surveyMapper.toDto(survey2)).thenReturn(new SurveyResponseDTO(2L, "Test survey 2", "survey for test 2", List.of()));
+            @Test
+            void retrieveAllSurveys_shouldReturnPageOfSurveys(){
+                Survey survey1 = new Survey(1L, "Test survey 1", "survey for test 1", List.of());
+                Survey survey2 = new Survey(2L, "Test survey 2", "survey for test 2", List.of());
 
-        Page<SurveyResponseDTO> surveysDTO = surveyService.retrieveAllSurveys(PageRequest.of(0, 10));
+                when(surveyRepository.findAll(PageRequest.of(0, 10)))
+                        .thenReturn(new PageImpl<>(List.of(survey1, survey2), PageRequest.of(0, 10), 2));
 
-        assertEquals(2, surveysDTO.getTotalElements());
-        assertEquals("Test survey 1", surveysDTO.toList().get(0).title());
-        assertEquals("Test survey 2", surveysDTO.toList().get(1).title());
+                when(surveyMapper.toDto(survey1)).thenReturn(new SurveyResponseDTO(1L, "Test survey 1", "survey for test 1", List.of()));
+                when(surveyMapper.toDto(survey2)).thenReturn(new SurveyResponseDTO(2L, "Test survey 2", "survey for test 2", List.of()));
 
-        verify(surveyRepository).findAll(PageRequest.of(0, 10));
-        verify(surveyMapper, times(2)).toDto(any(Survey.class));
+                Page<SurveyResponseDTO> surveysDTO = surveyService.retrieveAllSurveys(PageRequest.of(0, 10));
+
+                assertAll(
+                        () -> assertEquals(2, surveysDTO.getTotalElements()),
+                        () -> assertEquals("Test survey 1", surveysDTO.toList().get(0).title()),
+                        () -> assertEquals("Test survey 2", surveysDTO.toList().get(1).title())
+                );
+
+                verify(surveyRepository).findAll(PageRequest.of(0, 10));
+                verify(surveyMapper, times(2)).toDto(any(Survey.class));
+            }
+
+            @Test
+            void retrieveSurveyByTitle_shouldReturnSurveyIfExists(){
+                var title = "Test survey 1";
+
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
+
+                when(surveyMapper.toDto(survey))
+                        .thenReturn(surveyResponseDTO);
+
+                var surveyDTO = surveyService.readSurveyByTitle(title);
+
+                assertNotNull(surveyDTO);
+                assertEquals("Test survey 1", surveyDTO.title());
+
+                verify(surveyRepository).findByTitle(title);
+                verify(surveyMapper).toDto(survey);
+            }
+
+            @Test
+            void updateSurvey_shouldUpdateSurveyIfExists() {
+                var title = "Test survey 1";
+
+                var updatedSurvey = new Survey(1L, surveyRequestDTO.title(), surveyRequestDTO.description(), List.of());
+
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
+                when(surveyRepository.save(survey)).thenReturn(updatedSurvey);
+
+                // setting the values from the request to the response
+                surveyResponseDTO = SurveyResponseDTO.builder()
+                        .id(updatedSurvey.getId())
+                        .title(updatedSurvey.getTitle())
+                        .description(updatedSurvey.getDescription())
+                        .questions(List.of())
+                        .build();
+
+                System.out.println(surveyResponseDTO);
+
+                when(surveyMapper.toDto(updatedSurvey)).thenReturn(surveyResponseDTO);
+
+                surveyService.updateSurvey(surveyRequestDTO, title);
+
+                assertAll(
+                        () -> assertNotNull(surveyResponseDTO),
+                        () -> assertEquals(surveyResponseDTO.title(), surveyRequestDTO.title()),
+                        () -> assertEquals(surveyResponseDTO.description(), surveyRequestDTO.description())
+                );
+
+                verify(surveyRepository).findByTitle(title);
+                verify(surveyRepository).save(survey);
+                verify(surveyMapper).toDto(updatedSurvey);
+            }
+
+            @Test
+            void deleteSurvey_shouldDeleteSurveyIfExists() {
+                var surveyId = 1L;
+
+                when(surveyRepository.findById(surveyId)).thenReturn(Optional.of(survey));
+
+                doNothing().when(surveyRepository).delete(survey);
+
+                surveyService.deleteSurveyById(surveyId);
+
+                verify(surveyRepository).findById(surveyId);
+                verify(surveyRepository).delete(survey);
+            }
+        }
+
+        @Nested
+        @DisplayName("All survey unhappy path tests")
+        class SurveyUnhappyPathTests{
+
+            @Test
+            void createSurvey_shouldThrowTitleValidException() {
+
+                surveyRequestDTO = new SurveyRequestDTO("bannedWord1", "survey for test 1", List.of());
+
+                TitleNotValidException ex =
+                        assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+                System.out.println(ex.getMessage());
+
+                assertEquals("Title contains banned words", ex.getMessage());
+
+                verify(surveyRepository, never()).save(any(Survey.class));
+            }
+
+            @Test
+            void createSurvey_shouldThrowTitleValidExceptionForUppercase() {
+
+                surveyRequestDTO = new SurveyRequestDTO("test survey 1", "survey for test 1", List.of());
+
+                TitleNotValidException ex =
+                        assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+                System.out.println(ex.getMessage());
+
+                assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
+
+                verify(surveyRepository, never()).save(any(Survey.class));
+            }
+
+            @Test
+            void createSurvey_shouldThrowTitleValidExceptionForTitleLength() {
+
+                surveyRequestDTO = new SurveyRequestDTO("Test survey 1, test survey 1", "survey for test 1", List.of());
+
+                TitleNotValidException ex =
+                        assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+                System.out.println(ex.getMessage());
+
+                assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
+
+                verify(surveyRepository, never()).save(any(Survey.class));
+            }
+
+            @Test
+            void createSurvey_shouldThrowIllegalArgumentException() {
+
+                questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
+
+                surveyRequestDTO = new SurveyRequestDTO
+                        ("Test survey 1", "survey for test 1",
+                                List.of(questionRequestDTO));
+
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+
+                System.out.println(ex.getMessage());
+
+                var invalidQuestions = List.of(questionRequestDTO.description());
+
+                assertEquals("the next questions must ends with a question mark (?): " + invalidQuestions, ex.getMessage());
+
+                verify(surveyRepository, never()).save(any(Survey.class));
+            }
+
+            @Test
+            void retrieveSurveyByTitle_shouldThrowExceptionIfTitleDoesNotExist(){
+                var title = "Test survey 2";
+
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
+
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.readSurveyByTitle(title));
+
+                System.out.println(ex.getMessage());
+
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
+
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(surveyMapper);
+            }
+
+            @Test
+            void updateSurvey_shouldThrowExceptionIfTitleDoesNotExist(){
+                var title = "Test survey 2";
+
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
+
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
+
+                System.out.println(ex.getMessage());
+
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
+
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(surveyMapper);
+            }
+
+            @Test
+            void updateSurvey_shouldThrowTitleValidExceptionForUppercase(){
+                var title = "Test survey 2";
+
+                surveyRequestDTO = new SurveyRequestDTO("test survey 2", "survey for test 2", List.of());
+
+                TitleNotValidException ex =
+                        assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
+
+                System.out.println(ex.getMessage());
+
+                assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
+
+                verifyNoInteractions(surveyRepository);
+                verifyNoInteractions(surveyMapper);
+            }
+
+            @Test
+            void updateSurvey_shouldThrowTitleValidExceptionForTitleLength(){
+                var title = "Test survey 2";
+
+                surveyRequestDTO = new SurveyRequestDTO("Test survey 2, test survey 2", "survey for test 2", List.of());
+
+                TitleNotValidException ex =
+                        assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
+
+                System.out.println(ex.getMessage());
+
+                assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
+
+                verifyNoInteractions(surveyRepository);
+                verifyNoInteractions(surveyMapper);
+            }
+
+            @Test
+            void deleteSurvey_shouldThrowExceptionIfIdDoesNotExist() {
+                var surveyId = 2L;
+
+                when(surveyRepository.findById(surveyId)).thenReturn(Optional.empty());
+
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.deleteSurveyById(surveyId));
+
+                System.out.println(ex.getMessage());
+
+                assertTrue(ex.getMessage().contains("Entity not found with: " + surveyId));
+
+                verify(surveyRepository).findById(surveyId);
+            }
+        }
     }
 
-    @Test
-    void createSurvey_shouldThrowTitleValidException() {
 
-        surveyRequestDTO = new SurveyRequestDTO("bannedWord1", "survey for test 1", List.of());
+    @Nested
+    @DisplayName("All related question tests")
+    class QuestionTests{
 
-        TitleNotValidException ex =
-                assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+        @Nested
+        @DisplayName("All question happy path tests")
+        class QuestionHappyPathTests{
 
-        System.out.println(ex.getMessage());
+            @Test
+            void updateQuestion_shouldUpdateQuestionIfExists() {
+                var questionId = 1L;
+                var title = "Test survey 1";
 
-        assertEquals("Title contains banned words", ex.getMessage());
+                var updatedQuestion =
+                        new Question(1L, questionRequestDTO.description(), questionRequestDTO.correctAnswer(), questionRequestDTO.options(), survey);
 
-        verify(surveyRepository, never()).save(any(Survey.class));
-    }
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
+                when(questionRepository.save(question)).thenReturn(updatedQuestion);
 
-    @Test
-    void createSurvey_shouldThrowTitleValidExceptionForUppercase() {
+                questionResponseDTO = QuestionResponseDTO.builder()
+                        .id(updatedQuestion.getId())
+                        .description(updatedQuestion.getDescription())
+                        .correctAnswer(updatedQuestion.getCorrectAnswer())
+                        .options(List.of())
+                        .build();
 
-        surveyRequestDTO = new SurveyRequestDTO("test survey 1", "survey for test 1", List.of());
+                System.out.println(questionResponseDTO);
 
-        TitleNotValidException ex =
-                assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+                when(questionMapper.toDto(updatedQuestion)).thenReturn(questionResponseDTO);
 
-        System.out.println(ex.getMessage());
+                surveyService.updateQuestion(questionRequestDTO, title, questionId);
 
-        assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
+                assertAll(
+                        () -> assertNotNull(questionResponseDTO),
+                        () -> assertEquals(questionResponseDTO.description(), questionRequestDTO.description()),
+                        () -> assertEquals(questionResponseDTO.correctAnswer(), questionRequestDTO.correctAnswer()),
+                        () -> assertEquals(questionResponseDTO.options(), questionRequestDTO.options())
+                );
 
-        verify(surveyRepository, never()).save(any(Survey.class));
-    }
+                verify(surveyRepository).findByTitle(title);
+                verify(questionRepository).save(question);
+                verify(questionMapper).toDto(updatedQuestion);
+            }
 
-    @Test
-    void createSurvey_shouldThrowTitleValidExceptionForTitleLength() {
+            @Test
+            void deleteQuestion_shouldDeleteQuestionIfExists() {
+                var questionId = 1L;
+                var title = "Test survey 1";
 
-        surveyRequestDTO = new SurveyRequestDTO("Test survey 1, test survey 1", "survey for test 1", List.of());
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
-        TitleNotValidException ex =
-                assertThrows(TitleNotValidException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+                doNothing().when(questionRepository).delete(question);
 
-        System.out.println(ex.getMessage());
+                surveyService.deleteQuestionById(title, questionId);
 
-        assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
+                assertTrue(survey.getQuestions().isEmpty());
 
-        verify(surveyRepository, never()).save(any(Survey.class));
-    }
+                verify(surveyRepository).findByTitle(title);
+                verify(questionRepository).delete(question);
+            }
+        }
 
-    @Test
-    void createSurvey_shouldThrowIllegalArgumentException() {
+        @Nested
+        @DisplayName("All question unhappy path tests")
+        class QuestionUnhappyPathTests{
 
-        questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
+            @Test
+            void retrieveAllQuestions_shouldThrownExceptionIfTitleDoesNotExists() {
+                var title = "Test survey 2";
 
-        surveyRequestDTO = new SurveyRequestDTO
-                ("Test survey 1", "survey for test 1",
-                        List.of(questionRequestDTO));
+                when(questionRepository.findAllBySurveyTitle(title)).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.createSurvey(surveyRequestDTO));
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.retrieveAllSurveyQuestions(title));
 
-        System.out.println(ex.getMessage());
+                System.out.println(ex.getMessage());
 
-        var invalidQuestions = List.of(questionRequestDTO.description());
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
 
-        assertEquals("the next questions must ends with a question mark (?): " + invalidQuestions, ex.getMessage());
+                verify(questionRepository).findAllBySurveyTitle(title);
+            }
 
-        verify(surveyRepository, never()).save(any(Survey.class));
-    }
+            @Test
+            void retrieveQuestionById_shouldThrowExceptionIfTitleDoesNotExist(){
+                var questionId = 1L;
+                var title = "Test survey 2";
 
-    @Test
-    void retrieveAllQuestions_shouldThrownExceptionIfTitleDoesNotExists() {
-        var title = "Test survey 2";
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
-        when(questionRepository.findAllBySurveyTitle(title)).thenReturn(Optional.empty());
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.readQuestionById(title, questionId));
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.retrieveAllSurveyQuestions(title));
+                System.out.println(ex.getMessage());
 
-        System.out.println(ex.getMessage());
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
 
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
+                verify(surveyRepository).findByTitle(title);
+            }
 
-        verify(questionRepository).findAllBySurveyTitle(title);
-    }
+            @Test
+            void retrieveQuestionById_shouldThrowExceptionIfIdDoesNotExist(){
+                var questionId = 2L;
+                var title = "Test survey 1";
 
-    @Test
-    void retrieveSurveyByTitle_shouldReturnSurveyIfExists(){
-        var title = "Test survey 1";
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.readQuestionById(title, questionId));
 
-        when(surveyMapper.toDto(survey))
-                .thenReturn(surveyResponseDTO);
+                System.out.println(ex.getMessage());
 
-        var surveyDTO = surveyService.readSurveyByTitle(title);
+                assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
 
-        assertNotNull(surveyDTO);
-        assertEquals("Test survey 1", surveyDTO.title());
+                verify(surveyRepository).findByTitle(title);
+            }
 
-        verify(surveyRepository).findByTitle(title);
-        verify(surveyMapper).toDto(survey);
-    }
+            @Test
+            void updateQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
+                var questionId = 1L;
+                var title = "Test survey 2";
 
-    @Test
-    void retrieveSurveyByTitle_shouldThrowExceptionIfTitleDoesNotExist(){
-        var title = "Test survey 2";
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.readSurveyByTitle(title));
+                System.out.println(ex.getMessage());
 
-        System.out.println(ex.getMessage());
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
 
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(questionRepository);
+                verifyNoInteractions(questionMapper);
+            }
 
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(surveyMapper);
-    }
+            @Test
+            void updateQuestion_shouldThrowExceptionIfIdDoesNotExist() {
+                var questionId = 2L;
+                var title = "Test survey 1";
 
-    @Test
-    void retrieveQuestionById_shouldThrowExceptionIfTitleDoesNotExist(){
-        var questionId = 1L;
-        var title = "Test survey 2";
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.readQuestionById(title, questionId));
+                System.out.println(ex.getMessage());
 
-        System.out.println(ex.getMessage());
+                assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
 
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(questionRepository);
+                verifyNoInteractions(questionMapper);
+            }
 
-        verify(surveyRepository).findByTitle(title);
-    }
+            @Test
+            void updateQuestion_shouldThrowIllegalArgumentException() {
+                var questionId = 1L;
+                var title = "Test survey 1";
 
-    @Test
-    void retrieveQuestionById_shouldThrowExceptionIfIdDoesNotExist(){
-        var questionId = 2L;
-        var title = "Test survey 1";
+                questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
 
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.readQuestionById(title, questionId));
+                System.out.println(ex.getMessage());
 
-        System.out.println(ex.getMessage());
+                assertEquals("Question description must end with a question mark (?): " +
+                        questionRequestDTO.description(), ex.getMessage());
 
-        assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
+                verifyNoInteractions(questionMapper);
+            }
 
-        verify(surveyRepository).findByTitle(title);
-    }
+            @Test
+            void deleteQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
+                var questionId = 1L;
+                var title = "Test survey 2";
 
-    @Test
-    void updateSurvey_shouldUpdateSurveyIfExists() {
-        var title = "Test survey 1";
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
 
-        var updatedSurvey = new Survey(1L, surveyRequestDTO.title(), surveyRequestDTO.description(), List.of());
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.deleteQuestionById(title, questionId));
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
-        when(surveyRepository.save(survey)).thenReturn(updatedSurvey);
+                System.out.println(ex.getMessage());
 
-        // setting the values from the request to the response
-        surveyResponseDTO = SurveyResponseDTO.builder()
-                .id(updatedSurvey.getId())
-                .title(updatedSurvey.getTitle())
-                .description(updatedSurvey.getDescription())
-                .questions(List.of())
-                .build();
+                assertTrue(ex.getMessage().contains("Entity not found with: " + title));
 
-        System.out.println(surveyResponseDTO);
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(questionRepository);
+            }
 
-        when(surveyMapper.toDto(updatedSurvey)).thenReturn(surveyResponseDTO);
+            @Test
+            void deleteQuestion_shouldThrowExceptionIfIdDoesNotExist() {
+                var questionId = 2L;
+                var title = "Test survey 1";
 
-        surveyService.updateSurvey(surveyRequestDTO, title);
+                when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
 
-        assertNotNull(surveyResponseDTO);
-        assertEquals(surveyResponseDTO.title(), surveyRequestDTO.title());
-        assertEquals(surveyResponseDTO.description(), surveyRequestDTO.description());
+                IllegalArgumentException ex =
+                        assertThrows(IllegalArgumentException.class, () -> surveyService.deleteQuestionById(title, questionId));
 
-        verify(surveyRepository).findByTitle(title);
-        verify(surveyRepository).save(survey);
-        verify(surveyMapper).toDto(updatedSurvey);
-    }
+                System.out.println(ex.getMessage());
 
-    @Test
-    void updateSurvey_shouldThrowExceptionIfTitleDoesNotExist(){
-        var title = "Test survey 2";
+                assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
 
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
-
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(surveyMapper);
-    }
-
-    @Test
-    void updateSurvey_shouldThrowTitleValidExceptionForUppercase(){
-        var title = "Test survey 2";
-
-        surveyRequestDTO = new SurveyRequestDTO("test survey 2", "survey for test 2", List.of());
-
-        TitleNotValidException ex =
-                assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
-
-        System.out.println(ex.getMessage());
-
-        assertEquals("Title must start with an uppercase letter: " + surveyRequestDTO.title(), ex.getMessage());
-
-        verifyNoInteractions(surveyRepository);
-        verifyNoInteractions(surveyMapper);
-    }
-
-    @Test
-    void updateSurvey_shouldThrowTitleValidExceptionForTitleLength(){
-        var title = "Test survey 2";
-
-        surveyRequestDTO = new SurveyRequestDTO("Test survey 2, test survey 2", "survey for test 2", List.of());
-
-        TitleNotValidException ex =
-                assertThrows(TitleNotValidException.class, () -> surveyService.updateSurvey(surveyRequestDTO, title));
-
-        System.out.println(ex.getMessage());
-
-        assertEquals("Title must be shorter than 20 characters: " + surveyRequestDTO.title(), ex.getMessage());
-
-        verifyNoInteractions(surveyRepository);
-        verifyNoInteractions(surveyMapper);
-    }
-
-    @Test
-    void updateQuestion_shouldUpdateQuestionIfExists() {
-        var questionId = 1L;
-        var title = "Test survey 1";
-
-        var updatedQuestion =
-                new Question(1L, questionRequestDTO.description(), questionRequestDTO.correctAnswer(), questionRequestDTO.options(), survey);
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
-        when(questionRepository.save(question)).thenReturn(updatedQuestion);
-
-        questionResponseDTO = QuestionResponseDTO.builder()
-                .id(updatedQuestion.getId())
-                .description(updatedQuestion.getDescription())
-                .correctAnswer(updatedQuestion.getCorrectAnswer())
-                .options(List.of())
-                .build();
-
-        System.out.println(questionResponseDTO);
-
-        when(questionMapper.toDto(updatedQuestion)).thenReturn(questionResponseDTO);
-
-        surveyService.updateQuestion(questionRequestDTO, title, questionId);
-
-        assertNotNull(questionResponseDTO);
-        assertEquals(questionResponseDTO.description(), questionRequestDTO.description());
-        assertEquals(questionResponseDTO.correctAnswer(), questionRequestDTO.correctAnswer());
-        assertEquals(questionResponseDTO.options(), questionRequestDTO.options());
-
-        verify(surveyRepository).findByTitle(title);
-        verify(questionRepository).save(question);
-        verify(questionMapper).toDto(updatedQuestion);
-    }
-
-    @Test
-    void updateQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
-        var questionId = 1L;
-        var title = "Test survey 2";
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
-
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(questionRepository);
-        verifyNoInteractions(questionMapper);
-    }
-
-    @Test
-    void updateQuestion_shouldThrowExceptionIfIdDoesNotExist() {
-        var questionId = 2L;
-        var title = "Test survey 1";
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
-
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(questionRepository);
-        verifyNoInteractions(questionMapper);
-    }
-
-    @Test
-    void updateQuestion_shouldThrowIllegalArgumentException() {
-        var questionId = 1L;
-        var title = "Test survey 1";
-
-        questionRequestDTO = new QuestionRequestDTO("test question req", "question req for test", List.of());
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.updateQuestion(questionRequestDTO, title, questionId));
-
-        System.out.println(ex.getMessage());
-
-        assertEquals("Question description must end with a question mark (?): " +
-                questionRequestDTO.description(), ex.getMessage());
-
-        verifyNoInteractions(questionMapper);
-    }
-
-    @Test
-    void deleteSurvey_shouldDeleteSurveyIfExists() {
-        var surveyId = 1L;
-
-        when(surveyRepository.findById(surveyId)).thenReturn(Optional.of(survey));
-
-        doNothing().when(surveyRepository).delete(survey);
-
-        surveyService.deleteSurveyById(surveyId);
-
-        verify(surveyRepository).findById(surveyId);
-        verify(surveyRepository).delete(survey);
-    }
-
-    @Test
-    void deleteSurvey_shouldThrowExceptionIfIdDoesNotExist() {
-        var surveyId = 2L;
-
-        when(surveyRepository.findById(surveyId)).thenReturn(Optional.empty());
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.deleteSurveyById(surveyId));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + surveyId));
-
-        verify(surveyRepository).findById(surveyId);
-    }
-
-    @Test
-    void deleteQuestion_shouldDeleteQuestionIfExists() {
-        var questionId = 1L;
-        var title = "Test survey 1";
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
-
-        doNothing().when(questionRepository).delete(question);
-
-        surveyService.deleteQuestionById(title, questionId);
-
-        assertTrue(survey.getQuestions().isEmpty());
-
-        verify(surveyRepository).findByTitle(title);
-        verify(questionRepository).delete(question);
-    }
-
-    @Test
-    void deleteQuestion_shouldThrowExceptionIfTitleDoesNotExist() {
-        var questionId = 1L;
-        var title = "Test survey 2";
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.empty());
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.deleteQuestionById(title, questionId));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + title));
-
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(questionRepository);
-    }
-
-    @Test
-    void deleteQuestion_shouldThrowExceptionIfIdDoesNotExist() {
-        var questionId = 2L;
-        var title = "Test survey 1";
-
-        when(surveyRepository.findByTitle(title)).thenReturn(Optional.of(survey));
-
-        IllegalArgumentException ex =
-                assertThrows(IllegalArgumentException.class, () -> surveyService.deleteQuestionById(title, questionId));
-
-        System.out.println(ex.getMessage());
-
-        assertTrue(ex.getMessage().contains("Entity not found with: " + questionId));
-
-        verify(surveyRepository).findByTitle(title);
-        verifyNoInteractions(questionRepository);
+                verify(surveyRepository).findByTitle(title);
+                verifyNoInteractions(questionRepository);
+            }
+        }
     }
 
 }
