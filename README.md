@@ -22,6 +22,7 @@ Proyecto de práctica para consolidar conocimientos en Spring Boot, seguridad, t
 - Docker y Docker Compose instalados  
 - Java 17+ o Amazon Corretto 24 (según tu configuración)  
 - Maven o Gradle (según uses)
+- Para compilar el proyecto necesitas un GitHub Token con permiso `read:packages` configurado en ~/.m2/settings.xml
 
 ---
 
